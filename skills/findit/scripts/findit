@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Run the findit helper in FindIt's own environment (read-only).
+#   findit <command> [options]     e.g. findit report --month 2026-09
+# FindIt's location: $FINDIT_ROOT, else the path install.sh saved in ../findit_root,
+# else /Users/varun/Downloads/Varun/Find_v2.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+root="${FINDIT_ROOT:-}"
+if [ -z "$root" ] && [ -s "$here/../findit_root" ]; then
+  root="$(head -n 1 "$here/../findit_root")"
+fi
+root="${root:-/Users/varun/Downloads/Varun/Find_v2}"
+exec env FINDIT_ROOT="$root" uv run --no-sync --project "$root" python "$here/findit_query.py" "$@"
