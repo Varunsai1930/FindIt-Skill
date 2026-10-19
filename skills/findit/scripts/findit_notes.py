@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 META = re.compile(r'<!-- findit-report (\{[^\n]*\}) -->')
 BLOCK = re.compile(r'<!-- findit-data:([a-z-]+) -->\n(.*?)\n<!-- /findit-data -->', re.S)
-VALUE = re.compile(r'<!-- findit-value (\{[^\n]*\}) -->(.*?)<!-- /findit-value -->', re.S)
+VALUE = re.compile(r'<!-- findit-value (\{[^\n]*?\}) -->(.*?)<!-- /findit-value -->', re.S)
 LINK_START = re.compile(r'\[([^\]\n]+)\]\((https?://)')
 NUMBER = re.compile(r'(?<!\w)[+−-]?\d[\d,]*(?:\.\d+)?%?')
 SECTIONS = ('Summary', 'What changed', 'Why it may have changed',
@@ -343,9 +343,14 @@ def verify(text, ctx):
             actual = VALUE.fullmatch(fact(ctx, **info))[2]
             if shown != actual:
                 claim_errors.append({'reference': info, 'written': shown, 'expected': actual})
-            if (re.search(r'\d$', remainder[:match.start()]) or
-                    re.match(r'\d', remainder[match.end():])):
-                claim_errors.append({'reference': info, 'error': 'Unreferenced digit adjacent to fact'})
+            # Inspect neighboring displayed values too: adjacent annotated facts
+            # (even across invisible comments) must not concatenate into a new number.
+            before = VALUE.sub(lambda value: value[2], remainder[:match.start()])
+            after = VALUE.sub(lambda value: value[2], remainder[match.end():])
+            before = re.sub(r'<!--.*?-->', '', before, flags=re.S)
+            after = re.sub(r'<!--.*?-->', '', after, flags=re.S)
+            if re.search(r'\d$', before) or re.match(r'\d', after):
+                claim_errors.append({'reference': info, 'error': 'Adjacent digits change the displayed fact value'})
         except (ValueError, TypeError) as exc:
             claim_errors.append({'reference': spec, 'error': str(exc)})
     # Whitespace keeps any remaining digits visible to NUMBER, including suffixes.

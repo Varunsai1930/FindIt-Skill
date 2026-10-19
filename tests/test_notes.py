@@ -84,6 +84,43 @@ class NotesTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(len(result['claim_errors']), 1)
 
+    def test_multiple_facts_in_one_sentence_are_checked_separately(self):
+        ctx = context()
+        shares = notes.fact(ctx, 'fund', '/months/2026-01/changes/0/qty_change')
+        flow = notes.fact(ctx, 'fund', '/months/2026-01/changes/0/flow_cr')
+        text = completed(ctx).replace('The disclosure shows a change in positioning.',
+                                     'Added ' + shares + ' shares for ₹' + flow + ' cr.')
+        result = notes.verify(text, ctx)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['facts_checked'], 2)
+        changed = notes.verify(text.replace('-->5.25<!--', '-->99.25<!--'), ctx)
+        self.assertFalse(changed['ok'])
+        self.assertEqual(len(changed['claim_errors']), 1)
+        self.assertEqual(changed['claim_errors'][0]['expected'], '5.25')
+
+    def test_adjacent_fact_tokens_cannot_merge_into_a_different_number(self):
+        ctx = context()
+        shares = notes.fact(ctx, 'fund', '/months/2026-01/changes/0/qty_change')
+        flow = notes.fact(ctx, 'fund', '/months/2026-01/changes/0/flow_cr')
+        for separator in ('', '<!-- formatting -->'):
+            with self.subTest(separator=separator):
+                text = completed(ctx).replace('The disclosure shows a change in positioning.',
+                                             'Added ' + shares + separator + flow + ' shares.')
+                result = notes.verify(text, ctx)
+                self.assertFalse(result['ok'], result)
+                self.assertTrue(result['claim_errors'])
+                self.assertEqual(result['facts_checked'], 2)
+
+    def test_multiple_dates_in_one_sentence_are_checked_separately(self):
+        ctx = context()
+        first = notes.fact(ctx, 'calendar', '/this_month_portfolios_public_by')
+        second = notes.fact(ctx, 'calendar', '/next_month_portfolios_public_by')
+        text = completed(ctx).replace('The disclosure shows a change in positioning.',
+                                     'Disclosures are due on ' + first + ' and ' + second + '.')
+        result = notes.verify(text, ctx)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['facts_checked'], 2)
+
     def test_unannotated_numerical_prose_is_not_silently_approved(self):
         ctx = context()
         result = notes.verify(completed(ctx).replace('The disclosure shows a change in positioning.',
