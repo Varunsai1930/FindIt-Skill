@@ -42,7 +42,7 @@ uv run --no-sync findit digest --db <release db> --month YYYY-MM --schemes <ids>
 | `digest --schemes ID[,ID] [--month M]` | `findit digest` text for those schemes | `findit.cli.digest.build_digest` |
 | `calendar [--month M]` | Statutory deadlines: this and next month's MF portfolio disclosure, quarter-end shareholding filing deadlines | `findit.core.publication` |
 | `draft [--month M] [--stock S / --fund F]` | Research-note Markdown with scope-specific data blocks, release metadata, required sections and TODOs for authored analysis; stdout only | FindIt report plus helper stock/fund/trend/AMC/calendar outputs |
-| `fact --source SOURCE --path POINTER [--month M] [--stock S / --fund F]` | Scalar value wrapped in HTML comments identifying its field; copy it into numerical prose without editing | Structured helper output for this report scope |
+| `fact --source SOURCE --path POINTER [--path POINTER ...] [--month M] [--stock S / --fund F]` | Scalar values wrapped in HTML comments identifying each field; repeat `--path` to share one source lookup | Requested structured helper output for this report scope |
 | `verify FILE [--month M]` | Checks release identity, every required data block, referenced scalar values, report sections, numeric provenance and dated source metadata. No dependency on a top-15 ranking row for stock/fund reports. Exit 0 on pass, 2 on failed verification, 1 on input errors | Fresh helper outputs against the current active release |
 | `verify FILE --tables-only [--month M]` | Legacy market-table check: requires every top-15 row and rejects changed, duplicate, unknown or unparsed rows. Does not check narrative, citations or the full report. Not for final approval | FindIt report table functions |
 | `outpath [--month M] [--scope NAME]` | `reports_dir` and a `path` for the report file (refuses any path inside the FindIt repo) | — |
@@ -108,10 +108,13 @@ Examples (use the actual target and month selected for the report):
 "<skill-dir>/scripts/findit" draft --fund 1102 --month 2026-09
 "<skill-dir>/scripts/findit" fact --fund 1102 --month 2026-09 --source fund --path /months/2026-09/changes/0/flow_cr
 "<skill-dir>/scripts/findit" fact --stock INE0V6F01027 --month 2026-09 --source stock --path /consensus/amcs_buying
+"<skill-dir>/scripts/findit" fact --month 2026-09 --source top --path /buying/0/amcs_opening --path /buying/0/new_position_flow_cr
 "<skill-dir>/scripts/findit" verify "<report-path>" --month 2026-09
 ```
 
 The fact command emits the value between `findit-value` comments. Preserve both comments and the value. Verification rereads the field; it does not trust a saved JSON value supplied by the report author. Keep the surrounding sentence accurate about the field's entity, date and scope.
+
+Fact lookups load only the requested source rather than building a complete draft. Repeat `--path` to quote several fields from that source in one command; each fact is returned on its own line in the requested order. Every invocation reads the active release afresh; no saved value cache is trusted. If any path fails, the command returns an error without partial facts.
 
 Stock and stock-trend facts also pin the stock's ISIN, report month and release. Use `fact --stock ISIN` to cite an individual stock's history inside a market or fund report for the same month and release; verification reloads that stock's data directly, including months outside the market's top-15 buying list. Keep all of the emitted reference fields intact. Older references without stock context remain relative to their report's own scope.
 

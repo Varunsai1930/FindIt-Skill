@@ -133,7 +133,7 @@ class NotesTests(unittest.TestCase):
         result = notes.verify(text, market, stock_context=resolver)
         self.assertTrue(result['ok'], result)
         self.assertEqual(result['facts_checked'], 2)
-        resolver.assert_called_once_with('INE880J01026')
+        resolver.assert_called_once_with('INE880J01026', 'trend')
 
     def test_stock_reference_rejects_wrong_month_release_or_value(self):
         market, stock = context('market'), context('stock')
@@ -145,7 +145,7 @@ class NotesTests(unittest.TestCase):
                               token.replace('"release_id": "' + 'a' * 64 + '"', '"release_id": "' + 'b' * 64 + '"')]:
             changed = text.replace(token, changed_token)
             with self.subTest(changed=changed[-80:]):
-                self.assertFalse(notes.verify(changed, market, stock_context=lambda _: stock)['ok'])
+                self.assertFalse(notes.verify(changed, market, stock_context=lambda _isin, _source: stock)['ok'])
 
     def test_unannotated_numerical_prose_is_not_silently_approved(self):
         ctx = context()

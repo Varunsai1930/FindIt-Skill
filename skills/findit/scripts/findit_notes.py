@@ -63,26 +63,39 @@ def section(report, prefix):
     return '### ' + found[0].strip()
 
 
-def collect(fq, month, stock=None, fund=None):
-    """One process pins one release; all expected data is read afresh from FindIt."""
+def collect(fq, month, stock=None, fund=None, sources=None):
+    """Read fresh data; scalar lookups can request just the sources they need."""
     if stock and fund:
         raise ValueError('Choose a stock or a fund, not both')
     month = fq.check_month(month)
+    scope = 'stock' if stock else 'fund' if fund else 'market'
+    scoped_sources = {'stock': ('stock', 'trend'), 'fund': ('fund',), 'market': ('top', 'trend')}[scope]
+    if sources is not None and any(s not in ('release', 'amcs', 'calendar', *scoped_sources) for s in sources):
+        raise ValueError('Unknown structured source for this report scope')
+    wanted = sources if sources is not None else ('amcs', 'calendar', 'report', *scoped_sources)
     def run(command, **kwargs):
         return getattr(fq, 'cmd_' + command)(argparse.Namespace(month=month, **kwargs))
-    data = {'release': fq.current_release(), 'amcs': run('amcs'),
-            'calendar': run('calendar'), 'report': run('report')}
-    scope, target, title = 'market', None, 'market-wide'
+    data = {'release': fq.current_release()}
+    target, title = None, 'market-wide'
     if stock:
-        data['stock'] = run('stock', stock=stock, holdings=True)
-        scope, target, title = 'stock', data['stock']['isin'], data['stock']['name']
-        data['trend'] = run('trend', stock=[target], months=12, n=15)
+        if 'stock' in wanted:
+            data['stock'] = run('stock', stock=stock, holdings=True)
+            target, title = data['stock']['isin'], data['stock']['name']
+        else:
+            target = fq.resolve_stock(stock)[0]
+            title = target
     elif fund:
         data['fund'] = run('fund', fund=fund, months=3)
-        scope, target, title = 'fund', str(data['fund']['scheme_id']), data['fund']['scheme_name']
-    else:
-        data['top'] = run('top', n=15)
-        data['trend'] = run('trend', stock=None, months=6, n=15)
+        target, title = str(data['fund']['scheme_id']), data['fund']['scheme_name']
+    for source in wanted:
+        if source in data:
+            continue
+        if source == 'top':
+            data[source] = run('top', n=15)
+        elif source == 'trend':
+            data[source] = run('trend', stock=[target] if stock else None, months=12 if stock else 6, n=15)
+        else:
+            data[source] = run(source)
     meta = {'version': 1, 'scope': scope, 'target': target, 'month': month,
             'release_id': data['release']['release_id']}
     return {'meta': meta, 'title': title, 'data': data}
@@ -355,9 +368,10 @@ def verify(text, ctx, stock_context=None):
                 if ctx['meta']['scope'] != 'stock' or ctx['meta']['target'] != info['stock']:
                     if stock_context is None:
                         raise ValueError('Stock fact needs a read-only stock context resolver')
-                    if info['stock'] not in resolved_stocks:
-                        resolved_stocks[info['stock']] = stock_context(info['stock'])
-                    selected = resolved_stocks[info['stock']]
+                    key = (info['stock'], info['source'])
+                    if key not in resolved_stocks:
+                        resolved_stocks[key] = stock_context(*key)
+                    selected = resolved_stocks[key]
                 if any(selected['meta'].get(k) != v for k, v in (
                         ('scope', 'stock'), ('target', info['stock']), ('month', info['month']), ('release_id', info['release_id']))):
                     raise ValueError('Resolved stock context differs from the pinned fact')

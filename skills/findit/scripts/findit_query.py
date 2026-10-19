@@ -601,9 +601,9 @@ def _verify_tables(args):
                      "Checks rows shaped like the report's top-15 tables only.")}
 
 
-def _note_context(args):
+def _note_context(args, sources=None):
     import findit_notes
-    return findit_notes.collect(sys.modules[__name__], args.month, args.stock, args.fund)
+    return findit_notes.collect(sys.modules[__name__], args.month, args.stock, args.fund, sources=sources)
 
 
 def cmd_draft(args):
@@ -613,7 +613,8 @@ def cmd_draft(args):
 
 def cmd_fact(args):
     import findit_notes
-    return findit_notes.fact(_note_context(args), args.source, args.path)
+    ctx = _note_context(args, sources=[args.source])
+    return '\n'.join(findit_notes.fact(ctx, args.source, path) for path in args.path)
 
 
 def cmd_verify(args):
@@ -627,8 +628,8 @@ def cmd_verify(args):
     ctx = findit_notes.collect(sys.modules[__name__], meta['month'],
                               meta['target'] if meta['scope'] == 'stock' else None,
                               meta['target'] if meta['scope'] == 'fund' else None)
-    return findit_notes.verify(text, ctx, stock_context=lambda isin: findit_notes.collect(
-        sys.modules[__name__], meta['month'], stock=isin))
+    return findit_notes.verify(text, ctx, stock_context=lambda isin, source: findit_notes.collect(
+        sys.modules[__name__], meta['month'], stock=isin, sources=[source]))
 
 
 def cmd_outpath(args):
@@ -699,7 +700,8 @@ def build_parser() -> argparse.ArgumentParser:
         scope.add_argument("--fund")
         if name == "fact":
             p.add_argument("--source", required=True)
-            p.add_argument("--path", required=True, help="JSON pointer into that source, e.g. /consensus/amcs_buying")
+            p.add_argument("--path", required=True, action="append",
+                           help="JSON pointer into that source; repeat to quote several fields in one lookup")
     p = add("verify", cmd_verify, "Verify scoped data blocks, numerical claims, sections and source metadata")
     p.add_argument("file"); p.add_argument("--month")
     p.add_argument("--tables-only", action="store_true", help="Legacy check: requires complete top-15 tables; no prose or citation checks")
