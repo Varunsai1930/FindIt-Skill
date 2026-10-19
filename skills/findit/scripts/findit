@@ -11,4 +11,4 @@ if [ -z "$root" ] && [ -s "$here/../findit_root" ]; then
   root="$(head -n 1 "$here/../findit_root")"
 fi
 root="${root:-/Users/varun/Downloads/Varun/Find_v2}"
-exec env FINDIT_ROOT="$root" uv run --no-sync --project "$root" python "$here/findit_query.py" "$@"
+exec env FINDIT_ROOT="$root" PYTHONDONTWRITEBYTECODE=1 uv run --no-sync --project "$root" python "$here/findit_query.py" "$@"

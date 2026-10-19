@@ -2,8 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from helpers import MONTH, report_table, report_text, run, run_json, top
+from helpers import MONTH, fq, report_table, report_text, run, run_json, top
 
 
 def report_cells(row: dict) -> list[str]:
@@ -71,8 +72,8 @@ class VerifyTests(unittest.TestCase):
     def verify(self, lines: list[str]) -> dict:
         path = self.dir / "note.md"
         path.write_text("# Note\n\n" + "\n".join(lines) + "\n", encoding="utf-8")
-        code, data = run_json("verify", str(path), "--month", MONTH)
-        self.assertEqual(code, 0)
+        code, data = run_json("verify", str(path), "--month", MONTH, "--tables-only")
+        self.assertEqual(code, 0 if data["ok"] else 2)
         return data
 
     def test_untouched_tables_pass(self):
@@ -100,3 +101,44 @@ class VerifyTests(unittest.TestCase):
         self.assertFalse(data["ok"])
         self.assertEqual(data["rows_checked"], 0)
         self.assertIn("unparsed_table_rows", data)
+
+    def test_missing_row_fails(self):
+        lines = list(self.tables)
+        index = next(i for i, line in enumerate(lines) if line.startswith("| EQ"))
+        lines.pop(index)
+        self.assertFalse(self.verify(lines)["ok"])
+
+    def test_changed_duplicate_cannot_hide_behind_correct_first_row(self):
+        row = next(line for line in self.tables if line.startswith("| EQ"))
+        cells = row.split("|")
+        cells[3] = " +999 "
+        self.assertFalse(self.verify(self.tables + ["|".join(cells)])["ok"])
+
+    def test_official_buying_selling_overlap_passes(self):
+        row = next(line for line in self.tables if line.startswith("| EQ"))
+        official = [row, row]
+        with patch.object(fq, '_report_tables', return_value='\n'.join(official)):
+            result = self.verify(official)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['rows_checked'], 2)
+        self.assertEqual(result['duplicate_rows'], [])
+
+    def test_missing_or_excess_occurrences_of_overlapping_stock_fail(self):
+        row = next(line for line in self.tables if line.startswith("| EQ"))
+        with patch.object(fq, '_report_tables', return_value='\n'.join([row, row])):
+            missing = self.verify([row])
+            excess = self.verify([row, row, row])
+        self.assertFalse(missing['ok'])
+        self.assertTrue(missing['report_rows_not_in_file'])
+        self.assertFalse(excess['ok'])
+        self.assertTrue(excess['duplicate_rows'])
+
+    def test_changed_second_occurrence_of_official_overlap_fails(self):
+        row = next(line for line in self.tables if line.startswith("| EQ"))
+        cells = row.split('|')
+        cells[4] = ' 999,999 '
+        with patch.object(fq, '_report_tables', return_value='\n'.join([row, row])):
+            result = self.verify([row, '|'.join(cells)])
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['duplicate_rows'], [])
+        self.assertEqual(len(result['mismatches']), 1)

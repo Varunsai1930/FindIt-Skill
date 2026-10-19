@@ -13,7 +13,7 @@ no server) or FindIt's own report/summary/publication functions. Nothing is
 written anywhere; output goes to stdout.
 
 Commands: release, report, top, consensus, trend, search, stock, evidence,
-history, funds, amcs, fund, digest, calendar, verify, outpath. See references/commands.md.
+history, funds, amcs, fund, digest, calendar, draft, fact, verify, outpath. See references/commands.md.
 """
 from __future__ import annotations
 
@@ -23,8 +23,12 @@ import math
 import os
 import re
 import sys
+from collections import Counter
 from contextlib import closing
 from pathlib import Path
+
+# FindIt's packages live outside this skill; importing them must not create .pyc files there.
+sys.dont_write_bytecode = True
 
 DEFAULT_ROOT = "/Users/varun/Downloads/Varun/Find_v2"
 
@@ -289,12 +293,16 @@ def cmd_trend(args):
     span = prev_months(month, args.months)
     resolved = [resolution(s, *resolve_stock(s)) for s in args.stock or []]
     isins = [r["isin"] for r in resolved] or None
-    out = {"months": span, "stocks": {}}
+    out = {"months": span, "stocks": {}, "coverage_by_month": {}}
     if resolved:
         out["resolved"] = resolved
     ranks: dict[str, dict] = {}
     for m in span:
-        rows = api(f"/api/consensus/{m}", equity_only=1, active_only=1)["results"]
+        payload = api(f"/api/consensus/{m}", equity_only=1, active_only=1)
+        rows = payload["results"]
+        notices = {k: payload[k] for k in ("message", "quarantined_schemes") if payload.get(k)}
+        if notices:
+            out["coverage_by_month"][m] = notices
         for i, r in enumerate(rows, 1):
             if isins is None and i > args.n:
                 break
@@ -561,28 +569,65 @@ def _report_tables(month: str) -> str:
     return "\n".join(report._table(ranked.head(report.TOP_N)) + report._table(selling))
 
 
-def cmd_verify(args):
+def _verify_tables(args):
     """Check that a written report's top-15 rows match `findit report` exactly."""
     month = check_month(args.month)
-    expected = _table_rows(_report_tables(month))
+    expected_text = _report_tables(month)
+    expected = _table_rows(expected_text)
+    expected_counts = Counter(k for line in expected_text.splitlines() for k in _table_rows(line))
     text = Path(args.file).expanduser().read_text(encoding="utf-8")
     written = _table_rows(text)
+    # The official buying/selling lists may overlap. Match their multiplicity,
+    # while checking every occurrence so a changed duplicate cannot hide.
+    occurrences = [_table_rows(line) for line in text.splitlines()]
+    written_counts = Counter(k for row in occurrences for k in row)
+    duplicates = sorted(k for k in written if written_counts[k] > expected_counts[k])
     # Rows naming a ranked stock that the 6-column parser could not read (reformatted tables).
     unparsed = sorted({_norm_name(line.strip().strip("|").split("|")[0]) for line in text.splitlines()
                        if line.lstrip().startswith("|")
-                       and _norm_name(line.strip().strip("|").split("|")[0]) in expected}
-                      - set(written))
+                       and _norm_name(line.strip().strip("|").split("|")[0]) in expected
+                       and not _table_rows(line)})
     mismatches = [{"stock": k, "report": expected[k], "written": v}
-                  for k, v in written.items() if k in expected and expected[k] != v]
+                  for row in occurrences for k, v in row.items() if k in expected and expected[k] != v]
     unknown = sorted(k for k in written if k not in expected)
-    missing = sorted(k for k in expected if k not in written)
-    checked = len(written) - len(unknown)
+    missing = sorted(k for k in expected if written_counts[k] < expected_counts[k])
+    checked = sum(count for k, count in written_counts.items() if k in expected)
     return {"month": month, "rows_checked": checked, "mismatches": mismatches,
             "rows_not_in_report_tables": unknown, "unparsed_table_rows": unparsed,
             "report_rows_not_in_file": missing,
-            "ok": checked > 0 and not mismatches and not unknown and not unparsed,
+            "duplicate_rows": duplicates,
+            "ok": checked > 0 and not mismatches and not unknown and not unparsed and not missing and not duplicates,
             "note": ("No report-shaped row was found, so nothing was checked." if checked == 0 else
                      "Checks rows shaped like the report's top-15 tables only.")}
+
+
+def _note_context(args):
+    import findit_notes
+    return findit_notes.collect(sys.modules[__name__], args.month, args.stock, args.fund)
+
+
+def cmd_draft(args):
+    import findit_notes
+    return findit_notes.draft(_note_context(args))
+
+
+def cmd_fact(args):
+    import findit_notes
+    return findit_notes.fact(_note_context(args), args.source, args.path)
+
+
+def cmd_verify(args):
+    if args.tables_only:
+        return _verify_tables(args)
+    import findit_notes
+    text = Path(args.file).expanduser().read_text(encoding="utf-8")
+    meta = findit_notes.metadata(text)
+    if args.month and args.month != meta['month']:
+        raise ValueError('Requested month differs from the report metadata')
+    ctx = findit_notes.collect(sys.modules[__name__], meta['month'],
+                              meta['target'] if meta['scope'] == 'stock' else None,
+                              meta['target'] if meta['scope'] == 'fund' else None)
+    return findit_notes.verify(text, ctx)
 
 
 def cmd_outpath(args):
@@ -645,8 +690,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--month"); p.add_argument("--schemes", nargs="+", required=True)
     p = add("calendar", cmd_calendar, "Next disclosure/filing deadlines")
     p.add_argument("--month")
-    p = add("verify", cmd_verify, "Check a report file's top-15 rows against findit report")
+    for name, fn in (("draft", cmd_draft), ("fact", cmd_fact)):
+        p = add(name, fn, "Generate a scoped research-note draft" if name == "draft" else "Quote a verifiable field")
+        p.add_argument("--month")
+        scope = p.add_mutually_exclusive_group()
+        scope.add_argument("--stock")
+        scope.add_argument("--fund")
+        if name == "fact":
+            p.add_argument("--source", required=True)
+            p.add_argument("--path", required=True, help="JSON pointer into that source, e.g. /consensus/amcs_buying")
+    p = add("verify", cmd_verify, "Verify scoped data blocks, numerical claims, sections and source metadata")
     p.add_argument("file"); p.add_argument("--month")
+    p.add_argument("--tables-only", action="store_true", help="Legacy check: requires complete top-15 tables; no prose or citation checks")
     p = add("outpath", cmd_outpath, "Suggested report file path (outside FindIt)")
     p.add_argument("--month"); p.add_argument("--scope", help="e.g. market, a stock or fund name")
     return ap
@@ -657,14 +712,14 @@ def main(argv=None) -> int:
     _ARGS = build_parser().parse_args(argv)
     try:
         result = _ARGS.fn(_ARGS)
-    except LookupError as exc:
+    except (LookupError, OSError, ValueError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))
         return 1
     if isinstance(result, str):
         print(result, end="" if result.endswith("\n") else "\n")
     else:
         print(json.dumps(result, ensure_ascii=False, indent=1, default=str))
-    return 0
+    return 2 if _ARGS.command == "verify" and not result["ok"] else 0
 
 
 if __name__ == "__main__":

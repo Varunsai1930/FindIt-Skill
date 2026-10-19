@@ -8,10 +8,10 @@ All commands:
 
 - The database is the active release named by `Find_v2/real_data/readiness/releases/current.json` (`<release_id>.db`), opened read-only (`mode=ro`, `immutable=1`) through FindIt's dashboard app (`findit.web.app.create_app`, called in-process with `fastapi.testclient.TestClient`) and FindIt's own `report`, `summary`, `digest`, `consensus_signals` and `publication` functions. Nothing is recomputed in the helper.
 - `scripts/findit` is a wrapper: it finds FindIt (`$FINDIT_ROOT`, else `<skill-dir>/findit_root` written by install.sh, else `/Users/varun/Downloads/Varun/Find_v2`) and runs `uv run --no-sync --project <FindIt> python scripts/findit_query.py`. The release is read once per command, so one command never mixes two releases.
-- `--month` is `YYYY-MM`; omitted, it is the latest month with holding changes. Comparison commands (`report`, `top`, `consensus`, `trend`, `stock`, `evidence`, `fund`, `digest`, `verify`) reject a month without holding changes, such as the release's first month; `funds`, `amcs`, `history --start/--end`, `calendar` and `outpath` accept any loaded month.
+- `--month` is `YYYY-MM`; omitted, it is the latest month with holding changes. Comparison commands (`report`, `top`, `consensus`, `trend`, `stock`, `evidence`, `fund`, `digest`, `draft`, `fact`, `verify`) reject a month without holding changes, such as the release's first month; `funds`, `amcs`, `history --start/--end`, `calendar` and `outpath` accept any loaded month.
 - Money: FindIt stores ₹ lakh (`*_lakhs`). The helper adds `*_cr` = lakhs ÷ 100, rounded to 2 decimals. `findit report` rounds ₹ cr to whole numbers; when quoting a report table, copy the report's figure.
 - Stocks can be given as an ISIN or a name; names use FindIt's own search (`/api/stocks/search`) and the top match is used. `evidence` and `history` return `resolved` (`query`, `isin`, `name`, `other_matches`), `consensus` and `trend` a `resolved` list, and `stock` `search_matches`. If the top match is wrong, re-run with the ISIN.
-- Errors print `{"error": "..."}` and exit 1 (unknown month, a month with nothing to compare, unknown stock or fund, non-numeric `--schemes`, HTTP error from FindIt).
+- Input/lookup errors print `{"error": "..."}` and exit 1 (unknown month, a month with nothing to compare, unknown stock or fund, non-numeric `--schemes`, HTTP error from FindIt).
 - Environment: `FINDIT_ROOT` overrides the FindIt path (and the saved `findit_root`); `FINDIT_REPORTS_DIR` overrides where `outpath` points.
 
 The FindIt CLI equivalents (run from `/Users/varun/Downloads/Varun/Find_v2`):
@@ -31,7 +31,7 @@ uv run --no-sync findit digest --db <release db> --month YYYY-MM --schemes <ids>
 | `report [--month M]` | The monthly overview Markdown: coverage, top 15 broadest buying/selling, 10-year evidence table, track record | `findit.cli.report.build` |
 | `top [--month M] [--n 15]` | JSON of the same top-N buying and selling lists as `report`, in the same order, with all consensus fields | `/api/consensus/{M}` + `consensus_signals.broadest_selling` |
 | `consensus [--month M] [--stock S ...] [--n 30]` | Consensus rows for named stocks (with `rank_buying`), or the top N; `not_ranked` for named stocks with no activity | `/api/consensus/{M}` |
-| `trend [--month M] [--months 6] [--stock S ...] [--n 15]` | Per month: `rank_buying`, AMCs buying/selling, discretionary net, existing-position and total flow (₹ cr), FII/DII. Without `--stock`: the stocks in each month's top N | `/api/consensus/{m}` per month |
+| `trend [--month M] [--months 6] [--stock S ...] [--n 15]` | Per month: `rank_buying`, AMCs buying/selling, discretionary net, existing-position and total flow (₹ cr), FII/DII. Without `--stock`: the stocks in each month's top N; `coverage_by_month` preserves withheld/quarantine notices | `/api/consensus/{m}` per month |
 | `search QUERY [--month M] [--limit 8]` | Matching stocks: ISIN, name, industry, schemes holding | `/api/stocks/search` |
 | `stock S [--month M] [--holdings]` | One-stop stock view: `consensus` row (or `consensus_note`), `evidence` (per-fund changes), `history` (fixed cohort), `shareholding` filings, `holdings_all_schemes` (first 20 by value unless `--holdings`) | `/api/stock`, `/api/evidence`, `/api/history`, `/api/consensus` |
 | `evidence S [--month M] [--full]` | Per-fund changes in the stock vs the previous month; `--full` returns FindIt's raw payload including source workbook rows | `/api/evidence/{isin}` |
@@ -41,7 +41,10 @@ uv run --no-sync findit digest --db <release db> --month YYYY-MM --schemes <ids>
 | `fund F [--month M] [--months 3]` | For a scheme ID or name: rule-based `summary` per month, and for month M the equity `changes` (new/added/trimmed/exited, largest flow first) if FindIt's summary gate passes; else `changes_withheld` with the reason | `/api/summary/{id}/{m}`, `findit.summary.assess`, `mf_holding_deltas` |
 | `digest --schemes ID[,ID] [--month M]` | `findit digest` text for those schemes | `findit.cli.digest.build_digest` |
 | `calendar [--month M]` | Statutory deadlines: this and next month's MF portfolio disclosure, quarter-end shareholding filing deadlines | `findit.core.publication` |
-| `verify FILE [--month M]` | Checks every table row in FILE shaped like the report's top-15 tables (`Stock \| AMCs buying / selling \| Discretionary net \| Existing-position flow \| FII \| DII`) against the report's tables; `ok` is false on any mismatch, a row for a stock not in the report's tables, a row naming a ranked stock that could not be parsed (`unparsed_table_rows`, e.g. an added column), or when no row was checked at all. Names may drop the `EQ - ` prefix | `consensus_signals.ranked_consensus` + `broadest_selling` + `findit.cli.report._table` (the same functions `findit report` uses, without rerunning the backtest) |
+| `draft [--month M] [--stock S / --fund F]` | Research-note Markdown with scope-specific data blocks, release metadata, required sections and TODOs for authored analysis; stdout only | FindIt report plus helper stock/fund/trend/AMC/calendar outputs |
+| `fact --source SOURCE --path POINTER [--month M] [--stock S / --fund F]` | Scalar value wrapped in HTML comments identifying its field; copy it into numerical prose without editing | Structured helper output for this report scope |
+| `verify FILE [--month M]` | Checks release identity, every required data block, referenced scalar values, report sections, numeric provenance and dated source metadata. No dependency on a top-15 ranking row for stock/fund reports. Exit 0 on pass, 2 on failed verification, 1 on input errors | Fresh helper outputs against the current active release |
+| `verify FILE --tables-only [--month M]` | Legacy market-table check: requires every top-15 row and rejects changed, duplicate, unknown or unparsed rows. Does not check narrative, citations or the full report. Not for final approval | FindIt report table functions |
 | `outpath [--month M] [--scope NAME]` | `reports_dir` and a `path` for the report file (refuses any path inside the FindIt repo) | — |
 
 ## Field glossary (consensus rows)
@@ -92,3 +95,22 @@ Quarterly exchange filings: `quarter_end`, `promoter_pct`, `fii_pct`, `dii_pct`,
 - `report` → Coverage: how many active equity schemes and AMCs were compared, how many were left out and why, and the validation gate result. Restate it in every report.
 - Withheld / quarantined / not validated means the numbers failed or skipped FindIt's checks; say "withheld pending validation", never "no change".
 - A stock not in a month's ranking had no compared active-fund buying or selling that month.
+
+## Drafts, facts and verification
+
+Use `draft` as the report template; see [report-template.md](report-template.md). Stock and fund targets are mutually exclusive. Resolve ambiguous names before drafting; prefer the chosen ISIN or scheme ID. Metadata pins the report scope, target, month and release. A later active release causes verification to fail until the note is regenerated.
+
+`fact` uses a JSON pointer into a structured output. Available sources are `release`, `amcs`, `calendar` and, depending on scope, `top`/`trend`, `stock`/`trend`, or `fund`. Pointer segments name object keys or zero-based array indexes; escape `~` as `~0` and `/` as `~1`. Lists/objects are not scalar facts. Values use the helper's existing units; use `*_cr` for money.
+
+Examples (use the actual target and month selected for the report):
+
+```bash
+"<skill-dir>/scripts/findit" draft --fund 1102 --month 2026-09
+"<skill-dir>/scripts/findit" fact --fund 1102 --month 2026-09 --source fund --path /months/2026-09/changes/0/flow_cr
+"<skill-dir>/scripts/findit" fact --stock INE0V6F01027 --month 2026-09 --source stock --path /consensus/amcs_buying
+"<skill-dir>/scripts/findit" verify "<report-path>" --month 2026-09
+```
+
+The fact command emits the value between `findit-value` comments. Preserve both comments and the value. Verification rereads the field; it does not trust a saved JSON value supplied by the report author. Keep the surrounding sentence accurate about the field's entity, date and scope.
+
+Verification returns `block_errors`, `claim_errors`, `citation_errors`, `unverified_numeric_lines`, and `errors` for structure/metadata. Dates and other numerical FindIt prose also need fact references. Numerical external claims must have a registered source link on the same line and appear in `externally_sourced_numeric_lines` for human review. No article is fetched by `verify`; a syntactically valid source entry is not evidence that the page supports the claim. The agent must open sources during research and perform `manual_review` before delivering.
