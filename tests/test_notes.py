@@ -2,6 +2,7 @@
 import copy
 import json
 import unittest
+from unittest.mock import Mock
 
 from helpers import fq
 import findit_notes as notes
@@ -120,6 +121,31 @@ class NotesTests(unittest.TestCase):
         result = notes.verify(text, ctx)
         self.assertTrue(result['ok'], result)
         self.assertEqual(result['facts_checked'], 2)
+
+    def test_market_report_accepts_explicit_stock_history(self):
+        market, stock = context('market'), context('stock')
+        stock['meta']['target'] = 'INE880J01026'
+        stock['data']['trend']['stocks'] = {'INE880J01026': {'by_month': {'2026-01': {'amcs_buying': 6}}}}
+        token = notes.fact(stock, 'trend', '/stocks/INE880J01026/by_month/2026-01/amcs_buying')
+        text = completed(market).replace('The disclosure shows a change in positioning.',
+                                        token + ' AMCs bought JSW. The count was ' + token + '.')
+        resolver = Mock(return_value=stock)
+        result = notes.verify(text, market, stock_context=resolver)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['facts_checked'], 2)
+        resolver.assert_called_once_with('INE880J01026')
+
+    def test_stock_reference_rejects_wrong_month_release_or_value(self):
+        market, stock = context('market'), context('stock')
+        stock['meta']['target'] = 'INE880J01026'
+        token = notes.fact(stock, 'stock', '/consensus/amcs_buying')
+        text = completed(market).replace('The disclosure shows a change in positioning.', token + ' AMCs bought JSW.')
+        for changed_token in [token.replace('"month": "2026-01"', '"month": "2026-02"'),
+                              token.replace('-->2<!--', '-->999<!--'),
+                              token.replace('"release_id": "' + 'a' * 64 + '"', '"release_id": "' + 'b' * 64 + '"')]:
+            changed = text.replace(token, changed_token)
+            with self.subTest(changed=changed[-80:]):
+                self.assertFalse(notes.verify(changed, market, stock_context=lambda _: stock)['ok'])
 
     def test_unannotated_numerical_prose_is_not_silently_approved(self):
         ctx = context()

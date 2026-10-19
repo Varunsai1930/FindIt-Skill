@@ -627,7 +627,8 @@ def cmd_verify(args):
     ctx = findit_notes.collect(sys.modules[__name__], meta['month'],
                               meta['target'] if meta['scope'] == 'stock' else None,
                               meta['target'] if meta['scope'] == 'fund' else None)
-    return findit_notes.verify(text, ctx)
+    return findit_notes.verify(text, ctx, stock_context=lambda isin: findit_notes.collect(
+        sys.modules[__name__], meta['month'], stock=isin))
 
 
 def cmd_outpath(args):

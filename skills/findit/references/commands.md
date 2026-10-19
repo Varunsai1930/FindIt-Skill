@@ -113,4 +113,6 @@ Examples (use the actual target and month selected for the report):
 
 The fact command emits the value between `findit-value` comments. Preserve both comments and the value. Verification rereads the field; it does not trust a saved JSON value supplied by the report author. Keep the surrounding sentence accurate about the field's entity, date and scope.
 
+Stock and stock-trend facts also pin the stock's ISIN, report month and release. Use `fact --stock ISIN` to cite an individual stock's history inside a market or fund report for the same month and release; verification reloads that stock's data directly, including months outside the market's top-15 buying list. Keep all of the emitted reference fields intact. Older references without stock context remain relative to their report's own scope.
+
 Verification returns `block_errors`, `claim_errors`, `citation_errors`, `unverified_numeric_lines`, and `errors` for structure/metadata. Dates and other numerical FindIt prose also need fact references. Numerical external claims must have a registered source link on the same line and appear in `externally_sourced_numeric_lines` for human review. No article is fetched by `verify`; a syntactically valid source entry is not evidence that the page supports the claim. The agent must open sources during research and perform `manual_review` before delivering.

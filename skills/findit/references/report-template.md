@@ -26,6 +26,8 @@ Keep sections 1–6 in order and remove every TODO:
 
 For each FindIt number outside a generated data block, run `fact` with the report's month and target and the path to the scalar field you need. Paste its entire output inline, including both comments. For example, a sentence may render as “The fund added ₹235.4 cr to PB Fintech”; the underlying Markdown includes the field reference around `235.4`.
 
+For an individual stock's history in a market or fund note, use `fact --stock ISIN` with the report's month and a `stock` or `trend` path. Its reference includes the stock, month and release so verification can reload the exact stock context, even when it is absent from the market's ranked buying rows.
+
 Use the original helper JSON to find the path and identify the matching company or fund. Never choose a field only because it has the desired number. Facts cannot add, sum, divide or otherwise compute new measures. Qualitative prose needs no annotations. For literal dates from FindIt, use a fact from `calendar` or the relevant data field.
 
 External business figures require a registered web citation on the same line. These are surfaced for manual review, not verified against FindIt. Do not cite news as evidence for portfolio numbers. All numerical prose without either provenance form fails verification.

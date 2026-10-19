@@ -202,7 +202,11 @@ def fact(ctx, source, path):
                 value = value[token]
     except (KeyError, IndexError, TypeError) as exc:
         raise ValueError(f'No field at {source}{path}') from exc
-    return ('<!-- findit-value ' + json.dumps({'source': source, 'path': path}) + ' -->' +
+    reference = {'source': source, 'path': path}
+    if ctx['meta']['scope'] == 'stock' and source in ('stock', 'trend'):
+        reference.update(stock=ctx['meta']['target'], month=ctx['meta']['month'],
+                         release_id=ctx['meta']['release_id'])
+    return ('<!-- findit-value ' + json.dumps(reference) + ' -->' +
             scalar(value) + '<!-- /findit-value -->')
 
 
@@ -292,7 +296,7 @@ def citation_check(text):
     return sources, errors
 
 
-def verify(text, ctx):
+def verify(text, ctx, stock_context=None):
     errors, block_errors, claim_errors = [], [], []
     m = metadata(text)
     if m != ctx['meta']:
@@ -334,13 +338,30 @@ def verify(text, ctx):
             errors.append('Explanations need cited dated sources or an explicit search limitation')
     if re.search(r'\bTODO\b|<[^>\n]*…[^>\n]*>', text):
         errors.append('Unfinished report placeholders remain')
+    resolved_stocks = {}
     for match in VALUE.finditer(remainder):
         spec, shown = match.groups()
         try:
             info = json.loads(spec)
-            if not isinstance(info, dict) or set(info) != {'source', 'path'} or not all(isinstance(v, str) for v in info.values()):
-                raise ValueError('Fact references require source and path strings')
-            actual = VALUE.fullmatch(fact(ctx, **info))[2]
+            basic = {'source', 'path'}
+            scoped = basic | {'stock', 'month', 'release_id'}
+            if not isinstance(info, dict) or set(info) not in (basic, scoped) or not all(isinstance(v, str) for v in info.values()):
+                raise ValueError('Fact references require source/path and optional pinned stock context')
+            selected = ctx
+            if 'stock' in info:
+                if (info['month'] != ctx['meta']['month'] or info['release_id'] != ctx['meta']['release_id'] or
+                        info['source'] not in ('stock', 'trend') or not re.fullmatch(r'[A-Z]{2}[A-Z0-9]{9}[0-9]', info['stock'])):
+                    raise ValueError('Stock fact must use this report month/release and a valid stock source/ISIN')
+                if ctx['meta']['scope'] != 'stock' or ctx['meta']['target'] != info['stock']:
+                    if stock_context is None:
+                        raise ValueError('Stock fact needs a read-only stock context resolver')
+                    if info['stock'] not in resolved_stocks:
+                        resolved_stocks[info['stock']] = stock_context(info['stock'])
+                    selected = resolved_stocks[info['stock']]
+                if any(selected['meta'].get(k) != v for k, v in (
+                        ('scope', 'stock'), ('target', info['stock']), ('month', info['month']), ('release_id', info['release_id']))):
+                    raise ValueError('Resolved stock context differs from the pinned fact')
+            actual = VALUE.fullmatch(fact(selected, info['source'], info['path']))[2]
             if shown != actual:
                 claim_errors.append({'reference': info, 'written': shown, 'expected': actual})
             # Inspect neighboring displayed values too: adjacent annotated facts
