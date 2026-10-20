@@ -65,3 +65,33 @@ class NumericPresentationTests(unittest.TestCase):
                 with self.subTest(amount=amount, prose=prose):
                     text = completed(ctx).replace('The disclosure shows a change in positioning.', prose)
                     self.assertTrue(notes.verify(text, ctx)['ok'])
+
+
+class ReportVisibilityTests(unittest.TestCase):
+    def test_verification_markers_must_not_be_literal_code_or_hidden_html(self):
+        ctx = context()
+        base = completed(ctx)
+        token = notes.fact(ctx, 'fund', '/months/2026-01/changes/0/flow_cr')
+        attacks = {
+            'backtick fence': '```markdown\n' + base + '\n```',
+            'long fence': '````markdown\n' + base + '\n````',
+            'tilde fence': '~~~markdown\n' + base + '\n~~~',
+            'inline code': base.replace('The disclosure shows a change in positioning.', '`' + token + '`'),
+            'long inline code': base.replace('The disclosure shows a change in positioning.', '``' + token + '``'),
+            'hidden HTML': '<div hidden>\n' + base + '\n</div>',
+            'multiline hidden HTML': '<div\nhidden>\n' + base,
+            'multiline style HTML': '<style\ntype="text/css">\n' + base,
+        }
+        for name, text in attacks.items():
+            with self.subTest(attack=name):
+                result = notes.verify(text, ctx)
+                self.assertFalse(result['ok'], result)
+                self.assertTrue(result['errors'])
+
+    def test_ordinary_code_quotes_without_verification_markers_can_pass(self):
+        ctx = context()
+        for quote in ('Use `FindIt` for disclosure data.', '```text\nDisclosure data is available.\n```',
+                      'Literal `<span>` example.', '~~~html\n<span>example</span>\n~~~'):
+            with self.subTest(quote=quote):
+                text = completed(ctx).replace('The disclosure shows a change in positioning.', quote)
+                self.assertTrue(notes.verify(text, ctx)['ok'])

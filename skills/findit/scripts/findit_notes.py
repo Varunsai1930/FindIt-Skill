@@ -32,10 +32,40 @@ def visible_text(text):
     """Normalize presentation that can conceal a numeric sign or boundary."""
     text = without_links(text, keep_labels=True)
     text = re.sub(r'<!--.*?-->', '', text, flags=re.S)
-    text = re.sub(r'</?[A-Za-z][^>\n]*>', '', text)
+    text = re.sub(r'</?[A-Za-z][^>]*>', '', text)
     text = unicodedata.normalize('NFKC', html.unescape(text))
     text = ''.join(char for char in text if unicodedata.category(char) != 'Cf')
     return re.sub(r'[*_`~]', '', text)
+
+
+def markup_errors(text):
+    """Protocol markers must be active Markdown comments, not literal code."""
+    marker = re.compile(r'<!-- findit-(?:report |data:|value )')
+    inline = re.compile(r'(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)', re.S)
+    errors, prose = [], []
+    fence = None
+    hidden_marker = False
+    for line in text.splitlines(keepends=True):
+        delimiter = re.match(r'^ {0,3}(`{3,}|~{3,})(.*)$', line)
+        if fence:
+            hidden_marker |= bool(marker.search(line))
+            if (delimiter and delimiter[1][0] == fence[0] and
+                    len(delimiter[1]) >= fence[1] and not delimiter[2].strip()):
+                fence = None
+        elif delimiter:
+            fence = (delimiter[1][0], len(delimiter[1]))
+            hidden_marker |= bool(marker.search(line))
+        else:
+            prose.append(line)
+    prose = ''.join(prose)
+    if hidden_marker or any(marker.search(match[2]) for match in inline.finditer(prose)):
+        errors.append('Report metadata, data and fact markers cannot appear inside code spans or fences')
+    prose = inline.sub('', prose)
+    prose = BLOCK.sub('', META.sub('', prose))
+    prose = re.sub(r'<!--.*?-->', '', prose, flags=re.S)
+    if re.search(r'</?[A-Za-z][^>]*>', prose):
+        errors.append('Raw HTML outside generated data blocks is unsupported; use Markdown or escaped text')
+    return errors
 
 
 def scalar(value):
@@ -322,7 +352,7 @@ def citation_check(text):
 
 
 def verify(text, ctx, stock_context=None):
-    errors, block_errors, claim_errors = [], [], []
+    errors, block_errors, claim_errors = markup_errors(text), [], []
     m = metadata(text)
     if m != ctx['meta']:
         errors.append('Report month, scope, target or release differs from the active verification context')

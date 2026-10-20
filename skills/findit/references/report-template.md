@@ -32,6 +32,8 @@ Use the original helper JSON to find the path and identify the matching company 
 
 Keep signs and number formatting inside the fact exactly as emitted. Do not add a sign, exponent or decimal/thousands fragment outside the marker, or join two facts into one displayed number. Ordinary emphasis, sentence punctuation and whitespace between facts are supported. Verification checks decoded character entities and invisible formatting as well as the literal Markdown.
 
+Paste metadata, generated data blocks and facts as Markdown comments, outside code spans and fenced code blocks. Authored content supports Markdown and escaped literal text; raw HTML outside the generated data blocks fails verification because it can hide or alter the displayed report.
+
 External business figures require a registered web citation on the same line. These are surfaced for manual review, not verified against FindIt. Do not cite news as evidence for portfolio numbers. All numerical prose without either provenance form fails verification.
 
 ## Source table
