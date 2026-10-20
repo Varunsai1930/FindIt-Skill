@@ -68,6 +68,23 @@ def markup_errors(text):
     return errors
 
 
+def reference_json(spec):
+    """Parse small protocol objects without duplicate keys or recursion leaks."""
+    if len(spec) > 16_384:
+        raise ValueError('Reference JSON exceeds the 16384-character limit')
+    def unique_fields(pairs):
+        fields = {}
+        for key, value in pairs:
+            if key in fields:
+                raise ValueError(f'Duplicate reference JSON field: {key}')
+            fields[key] = value
+        return fields
+    try:
+        return json.loads(spec, object_pairs_hook=unique_fields)
+    except RecursionError as exc:
+        raise ValueError('Reference JSON nesting is too deep') from exc
+
+
 def scalar(value):
     if value is None or isinstance(value, float) and not math.isfinite(value):
         return 'unavailable'
@@ -269,8 +286,9 @@ def metadata(text):
     matches = META.findall(text)
     if len(matches) != 1:
         raise ValueError('Expected one report metadata marker; start with the draft command')
-    m = json.loads(matches[0])
-    if (not isinstance(m, dict) or m.get('version') != 1 or m.get('scope') not in ('market', 'stock', 'fund') or
+    m = reference_json(matches[0])
+    if (not isinstance(m, dict) or type(m.get('version')) is not int or m.get('version') != 1 or
+            m.get('scope') not in ('market', 'stock', 'fund') or
             not isinstance(m.get('month'), str) or not isinstance(m.get('release_id'), str)):
         raise ValueError('Invalid report metadata')
     if m['scope'] != 'market' and (not isinstance(m.get('target'), str) or not m['target']):
@@ -397,7 +415,7 @@ def verify(text, ctx, stock_context=None):
     for match in VALUE.finditer(remainder):
         spec, shown = match.groups()
         try:
-            info = json.loads(spec)
+            info = reference_json(spec)
             basic = {'source', 'path'}
             scoped = basic | {'stock', 'month', 'release_id'}
             if not isinstance(info, dict) or set(info) not in (basic, scoped) or not all(isinstance(v, str) for v in info.values()):

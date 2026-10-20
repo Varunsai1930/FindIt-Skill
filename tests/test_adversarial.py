@@ -1,6 +1,10 @@
 """Deliberately misleading reports must fail without breaking valid reports."""
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
+from helpers import run_json
 from test_notes import context, completed
 import findit_notes as notes
 
@@ -95,3 +99,44 @@ class ReportVisibilityTests(unittest.TestCase):
             with self.subTest(quote=quote):
                 text = completed(ctx).replace('The disclosure shows a change in positioning.', quote)
                 self.assertTrue(notes.verify(text, ctx)['ok'])
+
+
+class ReferenceParsingTests(unittest.TestCase):
+    def test_deep_fact_json_fails_verification_without_a_recursion_crash(self):
+        ctx = context()
+        spec = '{"source":"fund","path":' + '[' * 10000 + '0' + ']' * 10000 + '}'
+        token = '<!-- findit-value ' + spec + ' -->5.25<!-- /findit-value -->'
+        text = completed(ctx).replace('The disclosure shows a change in positioning.', token)
+        result = notes.verify(text, ctx)
+        self.assertFalse(result['ok'])
+        self.assertTrue(result['claim_errors'])
+
+    def test_deep_metadata_produces_a_structured_cli_error(self):
+        ctx = context()
+        spec = json.dumps(ctx['meta'])[:-1] + ',"extra":' + '[' * 10000 + '0' + ']' * 10000 + '}'
+        text = notes.META.sub(lambda _: '<!-- findit-report ' + spec + ' -->', completed(ctx))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'malformed.md'
+            path.write_text(text)
+            code, result = run_json('verify', str(path))
+        self.assertEqual(code, 1, result)
+        self.assertIn('error', result)
+
+    def test_duplicate_fact_keys_are_rejected_instead_of_using_the_last_one(self):
+        ctx = context()
+        spec = '{"source":"fund","path":"/bad","path":"/months/2026-01/changes/0/flow_cr"}'
+        token = '<!-- findit-value ' + spec + ' -->5.25<!-- /findit-value -->'
+        text = completed(ctx).replace('The disclosure shows a change in positioning.', token)
+        result = notes.verify(text, ctx)
+        self.assertFalse(result['ok'])
+        self.assertTrue(result['claim_errors'])
+
+    def test_duplicate_metadata_keys_and_boolean_versions_are_invalid(self):
+        ctx = context()
+        meta = json.dumps(ctx['meta'])
+        for spec in (meta.replace('"version": 1', '"version": 0, "version": 1'),
+                     meta.replace('"version": 1', '"version": true')):
+            with self.subTest(spec=spec):
+                text = notes.META.sub(lambda _: '<!-- findit-report ' + spec + ' -->', completed(ctx))
+                with self.assertRaises(ValueError):
+                    notes.metadata(text)
