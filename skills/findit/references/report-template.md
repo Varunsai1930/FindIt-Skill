@@ -20,7 +20,7 @@ Keep sections 1–6 in order and remove every TODO:
 3. **Why it may have changed:** Tie each possible explanation to a specific observation, cite the source beside it, and state whether it is company-specific, sector context or broad market context. Never describe it as the fund's confirmed reason. If no web tool was available or it failed, use the exact no-web sentence in SKILL.md. If searches worked but no dated sources were usable, use the exact no-usable-sources sentence instead.
 4. **Possible future impact:** Write conditional scenarios and their limits, grounded in the observed positioning and cited events. Keep the generated evidence block. No predictions, ratings, targets or advice.
 5. **What to keep an eye on:** Keep the generated deadlines; add sourced upcoming events and data caveats. Do not invent event dates.
-6. **Sources:** Fill in the generated source table for every external link, or explain that no external sources were retained.
+6. **Sources:** Replace the source TODO line with a Markdown table row for every external link. Keep the rows directly below the generated header without a blank line. If no external sources were retained, remove the unused table and explain the research limitation.
 
 ## Numerical prose
 

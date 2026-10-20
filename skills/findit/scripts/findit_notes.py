@@ -193,7 +193,7 @@ def draft(ctx):
         marked('evidence', b['evidence']),
         '## 5. What to keep an eye on\n' + marked('calendar', b['calendar']),
         '## 6. Sources\nFindIt active release and the helper commands used for this report.\n\n'
-        '| Title | Publisher | Published | Link |\n|---|---|---|---|\n\n'
+        '| Title | Publisher | Published | Link |\n|---|---|---|---|\n'
         'TODO: Register each web source with its exact publication date (YYYY-MM-DD); remove this line after research.',
         marked('disclaimer', b['disclaimer'])]) + '\n'
 

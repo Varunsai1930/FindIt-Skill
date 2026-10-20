@@ -65,6 +65,20 @@ class NotesTests(unittest.TestCase):
         ctx = context()
         self.assertFalse(notes.verify(notes.draft(ctx), ctx)['ok'])
 
+    def test_filling_source_placeholder_keeps_rows_with_the_table_header(self):
+        rows = ('| Article | Company | 2026-01-15 | [Read](https://example.org/news) |\n'
+                '| Follow-up | Company | 2026-01-20 | [Read](https://example.org/update) |')
+        for scope in ('market', 'stock', 'fund'):
+            with self.subTest(scope=scope):
+                ctx = context(scope)
+                text = completed(ctx).replace('No external sources were retained.', rows)
+                sources = text.split('## 6. Sources\n', 1)[1]
+                table_block = next(block for block in sources.split('\n\n')
+                                   if block.startswith('| Title |'))
+                for row in rows.splitlines():
+                    self.assertIn(row, table_block)
+                self.assertTrue(notes.verify(text, ctx)['ok'])
+
     def test_missing_changed_and_duplicate_blocks_fail(self):
         for scope, block in [('market', 'rankings'), ('stock', 'history'), ('stock', 'stock'),
                              ('stock', 'shareholding'), ('fund', 'fund'), ('fund', 'evidence'), ('fund', 'coverage')]:
