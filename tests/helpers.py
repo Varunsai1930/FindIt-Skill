@@ -2,7 +2,8 @@
 
 Run in FindIt's environment (read-only; nothing is written to FindIt):
 
-    uv run --no-sync --project /Users/varun/Downloads/Varun/Find_v2 python -m pytest tests
+    export FINDIT_ROOT="${FINDIT_ROOT:-../Find_v2}"
+    uv run --no-sync --project "$FINDIT_ROOT" python -B -m pytest tests
 """
 
 import contextlib

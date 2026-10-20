@@ -62,8 +62,8 @@ class VerifyTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory(prefix="findskill-test-")
         self.dir = Path(self._tmp.name)
         lines = report_text().splitlines()
-        start = next(i for i, l in enumerate(lines) if l.startswith("## Broadest buying"))
-        end = next(i for i, l in enumerate(lines) if l.startswith("## Evidence"))
+        start = next(i for i, line in enumerate(lines) if line.startswith("## Broadest buying"))
+        end = next(i for i, line in enumerate(lines) if line.startswith("## Evidence"))
         self.tables = lines[start:end]
 
     def tearDown(self):
@@ -85,7 +85,7 @@ class VerifyTests(unittest.TestCase):
 
     def test_tampered_cell_is_flagged(self):
         lines = list(self.tables)
-        i = next(i for i, l in enumerate(lines) if l.startswith("| ") and not l.startswith("| Stock |"))
+        i = next(i for i, line in enumerate(lines) if line.startswith("| ") and not line.startswith("| Stock |"))
         cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
         stock = cells[0]
         cells[3] = "999,999" if cells[3] != "999,999" else "1"

@@ -20,9 +20,20 @@ Reports are written to `reports/` here (symlink install), `~/FindIt-reports` (co
 
 ## Development
 
+From the repo root, use the adjacent FindIt checkout or set `FINDIT_ROOT` to its location:
+
 ```bash
-uv run --no-sync --project /Users/varun/Downloads/Varun/Find_v2 python -m pytest /Users/varun/Downloads/Varun/FindSkill/tests
+export FINDIT_ROOT="${FINDIT_ROOT:-../Find_v2}"
+uv run --no-sync --project "$FINDIT_ROOT" python -B -m pytest tests
 ```
+
+Installer tests also run independently of FindIt's environment and release:
+
+```bash
+python3 -B -m unittest discover -s tests -p test_install.py
+```
+
+Run static checks with `ruff check skills/findit/scripts tests`.
 
 The tests run `findit_query.py` against the active FindIt release, which they read from `Find_v2/real_data/readiness/releases/current.json`. They contain no release ID. They are read-only: they write nothing to Find_v2, create no `.pyc` files there and add no pytest cache. The tests check that:
 

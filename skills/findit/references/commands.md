@@ -15,11 +15,12 @@ All commands:
 - `--n`, `--limit` and `--months` must be positive integers. Zero and negative counts return a structured input error before querying data. Month spans are clipped to loaded comparison months.
 - Environment: `FINDIT_ROOT` overrides the FindIt path (and the saved `findit_root`); `FINDIT_REPORTS_DIR` overrides where `outpath` points.
 
-The FindIt CLI equivalents (run from `/Users/varun/Downloads/Varun/Find_v2`):
+The FindIt CLI equivalents (run from the FindSkill repo root; set `FINDIT_ROOT` for another checkout):
 
 ```bash
-uv run --no-sync findit report --db <release db> [--month YYYY-MM]
-uv run --no-sync findit digest --db <release db> --month YYYY-MM --schemes <ids>
+export FINDIT_ROOT="${FINDIT_ROOT:-../Find_v2}"
+uv run --no-sync --project "$FINDIT_ROOT" findit report --db <release db> [--month YYYY-MM]
+uv run --no-sync --project "$FINDIT_ROOT" findit digest --db <release db> --month YYYY-MM --schemes <ids>
 ```
 
 `report` in the helper calls the same `findit.cli.report.build`, so its Markdown is identical (only the DB path inside the price-fetch hints is absolute).

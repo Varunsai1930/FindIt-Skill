@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import ROOT
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class InstallTests(unittest.TestCase):
@@ -35,6 +35,25 @@ class InstallTests(unittest.TestCase):
     def install(self, *args):
         return subprocess.run(['bash', str(self.repo / 'install.sh'), *args],
                               env=self.env, capture_output=True, text=True, timeout=30)
+
+    def test_help_does_not_require_findit_or_create_an_install(self):
+        self.env['FINDIT_ROOT'] = str(self.base / 'missing FindIt')
+        for option in ('--help', '-h'):
+            with self.subTest(option=option):
+                result = self.install(option)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('Install the findit skill', result.stdout)
+                self.assertEqual(result.stderr, '')
+                self.assertFalse(self.config.exists())
+                self.assertFalse((self.repo / 'skills' / 'findit' / 'findit_root').exists())
+
+    def test_unknown_argument_is_reported_before_findit_validation(self):
+        self.env['FINDIT_ROOT'] = str(self.base / 'missing FindIt')
+        result = self.install('--unknown')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Unknown argument: --unknown', result.stderr)
+        self.assertFalse(self.config.exists())
+        self.assertFalse((self.repo / 'skills' / 'findit' / 'findit_root').exists())
 
     def test_symlink_install_is_repeatable_and_saves_root(self):
         first, second = self.install(), self.install()

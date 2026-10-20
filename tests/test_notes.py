@@ -1,10 +1,9 @@
 """Behavioral checks for report completeness, provenance and all three scopes."""
 import copy
-import json
 import unittest
 from unittest.mock import Mock
 
-from helpers import fq
+import helpers  # noqa: F401 -- initialize the helper import path before importing notes
 import findit_notes as notes
 
 

@@ -1,12 +1,11 @@
 """Live release checks for the commands not covered by the original suite."""
 import argparse
-import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from helpers import fq, MONTH, COVERAGE, DB, run_json, run, top
+from helpers import COVERAGE, MONTH, fq, run, run_json, top
 import findit_notes as notes
 from test_notes import completed
 

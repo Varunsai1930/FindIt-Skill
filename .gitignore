@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 skills/findit/findit_root
 .pytest_cache/
+.ruff_cache/

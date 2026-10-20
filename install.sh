@@ -6,10 +6,6 @@
 #                                  the path is saved in skills/findit/findit_root for the skill to use
 set -euo pipefail
 
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/skills/findit"
-REQUESTED_ROOT="${FINDIT_ROOT:-/Users/varun/Downloads/Varun/Find_v2}"
-FINDIT_ROOT="$(cd "$REQUESTED_ROOT" 2>/dev/null && pwd -P)" || {
-  echo "FindIt not found at $REQUESTED_ROOT. No skill was installed." >&2; exit 1; }
 MODE=link
 for arg in "$@"; do
   case "$arg" in
@@ -18,6 +14,11 @@ for arg in "$@"; do
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
+
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/skills/findit"
+REQUESTED_ROOT="${FINDIT_ROOT:-/Users/varun/Downloads/Varun/Find_v2}"
+FINDIT_ROOT="$(cd "$REQUESTED_ROOT" 2>/dev/null && pwd -P)" || {
+  echo "FindIt not found at $REQUESTED_ROOT. No skill was installed." >&2; exit 1; }
 
 # The helper runs in FindIt's own environment; check it can read the active release.
 if ! command -v uv >/dev/null 2>&1; then

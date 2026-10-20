@@ -37,8 +37,10 @@ def _findit_root() -> Path:
     if os.environ.get("FINDIT_ROOT"):
         return Path(os.environ["FINDIT_ROOT"]).expanduser()
     saved = Path(__file__).resolve().parents[1] / "findit_root"
-    if saved.is_file() and saved.read_text(encoding="utf-8").strip():
-        return Path(saved.read_text(encoding="utf-8").strip()).expanduser()
+    if saved.is_file():
+        saved_root = saved.read_text(encoding="utf-8").strip()
+        if saved_root:
+            return Path(saved_root).expanduser()
     return Path(DEFAULT_ROOT)
 
 
@@ -52,7 +54,7 @@ try:
     from findit.web import app as web
     from findit.core import consensus_signals, publication
     from findit.store import db as store_db
-    from findit.summary import assess, get_summary
+    from findit.summary import assess
 except ImportError as exc:  # pragma: no cover - environment problem
     sys.exit(f"FindIt is not importable ({exc}). Run with: "
              f"uv run --no-sync --project {FINDIT_ROOT} python {Path(__file__).name} ...")
@@ -653,9 +655,6 @@ def cmd_outpath(args):
 
 # -- CLI ----------------------------------------------------------------------
 
-_ARGS = None
-
-
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
@@ -669,29 +668,46 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("report", cmd_report, "The findit report Markdown (same function)")
     p.add_argument("--month")
     p = add("top", cmd_top, "Top-N broadest buying and selling as JSON")
-    p.add_argument("--month"); p.add_argument("--n", type=int, default=15)
+    p.add_argument("--month")
+    p.add_argument("--n", type=int, default=15)
     p = add("consensus", cmd_consensus, "Consensus rows (top N, or named stocks)")
-    p.add_argument("--month"); p.add_argument("--stock", action="append"); p.add_argument("--n", type=int, default=30)
+    p.add_argument("--month")
+    p.add_argument("--stock", action="append")
+    p.add_argument("--n", type=int, default=30)
     p = add("trend", cmd_trend, "Consensus by month for stocks, or recurring top-N names")
-    p.add_argument("--month"); p.add_argument("--months", type=int, default=6)
-    p.add_argument("--stock", action="append"); p.add_argument("--n", type=int, default=15)
+    p.add_argument("--month")
+    p.add_argument("--months", type=int, default=6)
+    p.add_argument("--stock", action="append")
+    p.add_argument("--n", type=int, default=15)
     p = add("search", cmd_search, "Find stocks by name or ISIN prefix")
-    p.add_argument("query"); p.add_argument("--month"); p.add_argument("--limit", type=int, default=8)
+    p.add_argument("query")
+    p.add_argument("--month")
+    p.add_argument("--limit", type=int, default=8)
     p = add("stock", cmd_stock, "Everything about one stock for a month")
-    p.add_argument("stock"); p.add_argument("--month"); p.add_argument("--holdings", action="store_true")
+    p.add_argument("stock")
+    p.add_argument("--month")
+    p.add_argument("--holdings", action="store_true")
     p = add("evidence", cmd_evidence, "Per-fund changes in a stock for a month")
-    p.add_argument("stock"); p.add_argument("--month"); p.add_argument("--full", action="store_true")
+    p.add_argument("stock")
+    p.add_argument("--month")
+    p.add_argument("--full", action="store_true")
     p = add("history", cmd_history, "Fixed-cohort month-by-month history of a stock")
-    p.add_argument("stock"); p.add_argument("--start"); p.add_argument("--end")
+    p.add_argument("stock")
+    p.add_argument("--start")
+    p.add_argument("--end")
     p = add("funds", cmd_funds, "Find schemes by AMC/name words")
-    p.add_argument("query", nargs="?"); p.add_argument("--month"); p.add_argument("--limit", type=int, default=25)
+    p.add_argument("query", nargs="?")
+    p.add_argument("--month")
+    p.add_argument("--limit", type=int, default=25)
     p = add("amcs", cmd_amcs, "Schemes loaded per AMC, this vs previous month")
     p.add_argument("--month")
     p = add("fund", cmd_fund, "One scheme's summaries and change rows")
-    p.add_argument("fund", help="scheme_id or name words"); p.add_argument("--month")
+    p.add_argument("fund", help="scheme_id or name words")
+    p.add_argument("--month")
     p.add_argument("--months", type=int, default=3)
     p = add("digest", cmd_digest, "findit digest text for schemes")
-    p.add_argument("--month"); p.add_argument("--schemes", nargs="+", required=True)
+    p.add_argument("--month")
+    p.add_argument("--schemes", nargs="+", required=True)
     p = add("calendar", cmd_calendar, "Next disclosure/filing deadlines")
     p.add_argument("--month")
     for name, fn in (("draft", cmd_draft), ("fact", cmd_fact)):
@@ -705,22 +721,23 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--path", required=True, action="append",
                            help="JSON pointer into that source; repeat to quote several fields in one lookup")
     p = add("verify", cmd_verify, "Verify scoped data blocks, numerical claims, sections and source metadata")
-    p.add_argument("file"); p.add_argument("--month")
+    p.add_argument("file")
+    p.add_argument("--month")
     p.add_argument("--tables-only", action="store_true", help="Legacy check: requires complete top-15 tables; no prose or citation checks")
     p = add("outpath", cmd_outpath, "Suggested report file path (outside FindIt)")
-    p.add_argument("--month"); p.add_argument("--scope", help="e.g. market, a stock or fund name")
+    p.add_argument("--month")
+    p.add_argument("--scope", help="e.g. market, a stock or fund name")
     return ap
 
 
 def main(argv=None) -> int:
-    global _ARGS
-    _ARGS = build_parser().parse_args(argv)
+    args = build_parser().parse_args(argv)
     try:
         for field in ('n', 'limit', 'months'):
-            value = getattr(_ARGS, field, None)
+            value = getattr(args, field, None)
             if value is not None and value < 1:
                 raise ValueError(f'--{field} must be a positive integer')
-        result = _ARGS.fn(_ARGS)
+        result = args.fn(args)
     except (LookupError, OSError, ValueError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))
         return 1
@@ -728,7 +745,7 @@ def main(argv=None) -> int:
         print(result, end="" if result.endswith("\n") else "\n")
     else:
         print(json.dumps(result, ensure_ascii=False, indent=1, default=str))
-    return 2 if _ARGS.command == "verify" and not result["ok"] else 0
+    return 2 if args.command == "verify" and not result["ok"] else 0
 
 
 if __name__ == "__main__":
