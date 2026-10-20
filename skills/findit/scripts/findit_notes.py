@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import json
 import math
 import re
+import unicodedata
 from collections import Counter
 from urllib.parse import urlsplit
 
@@ -24,6 +26,16 @@ DISCLAIMER = ('Research, not investment advice. No buy, sell or hold recommendat
               'Flows are estimates from disclosed month-end prices, not execution prices or returns.')
 NO_NEWS = 'No usable dated sources were found in this session, so no explanations are given.'
 NO_WEB = 'No web search was available in this session, so no explanations are given.'
+
+
+def visible_text(text):
+    """Normalize presentation that can conceal a numeric sign or boundary."""
+    text = without_links(text, keep_labels=True)
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.S)
+    text = re.sub(r'</?[A-Za-z][^>\n]*>', '', text)
+    text = unicodedata.normalize('NFKC', html.unescape(text))
+    text = ''.join(char for char in text if unicodedata.category(char) != 'Cf')
+    return re.sub(r'[*_`~]', '', text)
 
 
 def scalar(value):
@@ -382,10 +394,10 @@ def verify(text, ctx, stock_context=None):
             # (even across invisible comments) must not concatenate into a new number.
             before = VALUE.sub(lambda value: value[2], remainder[:match.start()])
             after = VALUE.sub(lambda value: value[2], remainder[match.end():])
-            before = re.sub(r'<!--.*?-->', '', before, flags=re.S)
-            after = re.sub(r'<!--.*?-->', '', after, flags=re.S)
-            if re.search(r'\d$', before) or re.match(r'\d', after):
-                claim_errors.append({'reference': info, 'error': 'Adjacent digits change the displayed fact value'})
+            before, after = visible_text(before), visible_text(after)
+            if (re.search(r'[\d+−-]$|\d[.,]+$', before) or
+                    re.match(r'\d|[.,]\d|[eE][+−-]?\d', after)):
+                claim_errors.append({'reference': info, 'error': 'Surrounding text changes the displayed fact value'})
         except (ValueError, TypeError) as exc:
             claim_errors.append({'reference': spec, 'error': str(exc)})
     # Whitespace keeps any remaining digits visible to NUMBER, including suffixes.
@@ -405,7 +417,7 @@ def verify(text, ctx, stock_context=None):
         if in_sources and line.startswith('|'):
             continue
         line = re.sub(r'^## [1-6]\. ', '', line)
-        clean = without_links(line, keep_labels=True)
+        clean = visible_text(without_links(line, keep_labels=True))
         if NUMBER.search(clean):
             if any(url in sources for _, _, _, url in markdown_links(line)):
                 external_lines.append(line)
