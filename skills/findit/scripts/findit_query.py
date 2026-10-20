@@ -168,6 +168,8 @@ def check_month(month: str | None, compared: bool = True) -> str:
 
 
 def prev_months(month: str, n: int) -> list[str]:
+    if n < 1:
+        raise ValueError('months must be a positive integer')
     with_changes = _month_lists()[1]
     if month not in with_changes:
         return []
@@ -714,6 +716,10 @@ def main(argv=None) -> int:
     global _ARGS
     _ARGS = build_parser().parse_args(argv)
     try:
+        for field in ('n', 'limit', 'months'):
+            value = getattr(_ARGS, field, None)
+            if value is not None and value < 1:
+                raise ValueError(f'--{field} must be a positive integer')
         result = _ARGS.fn(_ARGS)
     except (LookupError, OSError, ValueError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))

@@ -12,6 +12,7 @@ All commands:
 - Money: FindIt stores ₹ lakh (`*_lakhs`). The helper adds `*_cr` = lakhs ÷ 100, rounded to 2 decimals. `findit report` rounds ₹ cr to whole numbers; when quoting a report table, copy the report's figure.
 - Stocks can be given as an ISIN or a name; names use FindIt's own search (`/api/stocks/search`) and the top match is used. `evidence` and `history` return `resolved` (`query`, `isin`, `name`, `other_matches`), `consensus` and `trend` a `resolved` list, and `stock` `search_matches`. If the top match is wrong, re-run with the ISIN.
 - Input/lookup errors print `{"error": "..."}` and exit 1 (unknown month, a month with nothing to compare, unknown stock or fund, non-numeric `--schemes`, HTTP error from FindIt).
+- `--n`, `--limit` and `--months` must be positive integers. Zero and negative counts return a structured input error before querying data. Month spans are clipped to loaded comparison months.
 - Environment: `FINDIT_ROOT` overrides the FindIt path (and the saved `findit_root`); `FINDIT_REPORTS_DIR` overrides where `outpath` points.
 
 The FindIt CLI equivalents (run from `/Users/varun/Downloads/Varun/Find_v2`):

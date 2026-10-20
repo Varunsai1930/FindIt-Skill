@@ -3,8 +3,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
-from helpers import run_json
+from helpers import MONTH, fq, run_json
 from test_notes import context, completed
 import findit_notes as notes
 
@@ -162,3 +163,38 @@ class SourceUrlTests(unittest.TestCase):
                 text = completed(ctx).replace('No external sources were retained.',
                     '| Article | Company | 2026-01-15 | [Read](' + url + ') |')
                 self.assertTrue(notes.verify(text, ctx)['ok'])
+
+
+class CountInputTests(unittest.TestCase):
+    cases = (
+        ('top', (), '--n'), ('consensus', (), '--n'),
+        ('trend', (), '--months'), ('trend', (), '--n'),
+        ('search', ('example',), '--limit'), ('funds', (), '--limit'),
+        ('fund', ('1',), '--months'),
+    )
+
+    def test_nonpositive_counts_fail_before_loading_data(self):
+        for command, args, flag in self.cases:
+            for value in ('0', '-1'):
+                with self.subTest(command=command, flag=flag, value=value):
+                    handler = Mock(return_value={'rows': []})
+                    with patch.object(fq, 'cmd_' + command, handler):
+                        code, result = run_json(command, *args, flag, value)
+                    self.assertEqual(code, 1, result)
+                    self.assertIn('positive', result['error'])
+                    handler.assert_not_called()
+
+    def test_positive_counts_reach_the_requested_command(self):
+        for command, args, flag in self.cases:
+            with self.subTest(command=command, flag=flag):
+                handler = Mock(return_value={'rows': []})
+                with patch.object(fq, 'cmd_' + command, handler):
+                    code, result = run_json(command, *args, flag, '1')
+                self.assertEqual(code, 0, result)
+                handler.assert_called_once()
+
+    def test_internal_month_selection_rejects_empty_spans_and_clips_large_valid_spans(self):
+        for value in (0, -1):
+            with self.subTest(months=value), self.assertRaises(ValueError):
+                fq.prev_months(MONTH, value)
+        self.assertTrue(fq.prev_months(MONTH, 1_000_000))
