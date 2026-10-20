@@ -332,6 +332,17 @@ def without_links(text, keep_labels=False):
     return ''.join(pieces)
 
 
+def valid_source_url(url):
+    try:
+        parsed = urlsplit(url)
+        # Accessing .port also validates its numeric form and range.
+        parsed.port
+        return (parsed.scheme in ('http', 'https') and bool(parsed.hostname) and
+                not any(char.isspace() or unicodedata.category(char).startswith('C') for char in url))
+    except ValueError:
+        return False
+
+
 def citation_check(text):
     """Only visible metadata is checked; never fetch or execute links from the report."""
     errors, sources = [], {}
@@ -354,7 +365,7 @@ def citation_check(text):
             valid_date = bool(re.fullmatch(r'\d{4}-\d{2}-\d{2}', published)) and dt.date.fromisoformat(published) <= dt.date.today()
         except ValueError:
             pass
-        if not title or not publisher or not valid_date or not match or not urlsplit(match[3]).netloc:
+        if not title or not publisher or not valid_date or not match or not valid_source_url(match[3]):
             errors.append(f'Incomplete or invalid source metadata: {title or line}')
             continue
         if match[3] in sources:

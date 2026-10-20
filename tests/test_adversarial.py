@@ -140,3 +140,25 @@ class ReferenceParsingTests(unittest.TestCase):
                 text = notes.META.sub(lambda _: '<!-- findit-report ' + spec + ' -->', completed(ctx))
                 with self.assertRaises(ValueError):
                     notes.metadata(text)
+
+
+class SourceUrlTests(unittest.TestCase):
+    def test_malformed_hosts_and_ports_return_citation_errors_without_crashing(self):
+        ctx = context()
+        for url in ('https://[bad/path', 'https://example.org:bad/news',
+                    'https://example.org:70000/news', 'https://:443/news',
+                    'https://exam\x00ple.org/news'):
+            with self.subTest(url=url):
+                text = completed(ctx).replace('No external sources were retained.',
+                    '| Article | Company | 2026-01-15 | [Read](' + url + ') |')
+                result = notes.verify(text, ctx)
+                self.assertFalse(result['ok'], result)
+                self.assertTrue(result['citation_errors'])
+
+    def test_valid_explicit_ports_and_ipv6_urls_remain_supported(self):
+        ctx = context()
+        for url in ('https://example.org:443/news', 'https://[2001:db8::1]:443/news'):
+            with self.subTest(url=url):
+                text = completed(ctx).replace('No external sources were retained.',
+                    '| Article | Company | 2026-01-15 | [Read](' + url + ') |')
+                self.assertTrue(notes.verify(text, ctx)['ok'])

@@ -48,6 +48,8 @@ Keep these four columns; use one row per distinct URL:
 
 Read the source page to confirm the title, publisher, publication date and supporting passage. Use the actual publication date, not an event date, crawl date, URL date or an invented day within a month. Exclude sources whose exact date is unavailable. Future publication dates, invalid dates, missing metadata and unregistered links fail verification. Cite these same URLs beside the claims they support.
 
+Source links need an absolute HTTP or HTTPS URL with a host and a valid port when specified. Malformed IPv6 addresses, invalid ports and control characters produce citation errors; verification never fetches a URL to validate it.
+
 ## Delivery check
 
 Run `verify "<report-path>" --month M`; require `ok: true` and exit 0. Fix every reported error. Review the returned manual-review items: actual source support, correct field/entity/month/scope in prose, conditional reasoning and no investment advice. The verifier checks data fidelity and citation metadata; it cannot establish why a fund traded.
