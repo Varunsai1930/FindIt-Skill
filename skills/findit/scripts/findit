@@ -11,4 +11,13 @@ if [ -z "$root" ] && [ -s "$here/../findit_root" ]; then
   root="$(head -n 1 "$here/../findit_root")"
 fi
 root="${root:-/Users/varun/Downloads/Varun/Find_v2}"
-exec env FINDIT_ROOT="$root" PYTHONDONTWRITEBYTECODE=1 uv run --no-sync --project "$root" python "$here/findit_query.py" "$@"
+export FINDIT_ROOT="$root" PYTHONDONTWRITEBYTECODE=1
+if [ -x "$root/.venv/bin/python" ]; then
+  exec "$root/.venv/bin/python" "$here/findit_query.py" "$@"
+fi
+# Sandboxes may deny access to uv's default cache under the user's home.
+# Respect explicit cache settings; otherwise uv manages a temporary cache.
+if [ -z "${UV_CACHE_DIR+x}" ] && [ -z "${UV_NO_CACHE+x}" ]; then
+  exec uv --no-cache run --no-sync --project "$root" python "$here/findit_query.py" "$@"
+fi
+exec uv run --no-sync --project "$root" python "$here/findit_query.py" "$@"

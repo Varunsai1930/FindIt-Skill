@@ -16,6 +16,8 @@ FindIt is a local Python 3.12 project (by default `/Users/varun/Downloads/Varun/
 "<skill-dir>/scripts/findit" <command> [...]
 ```
 
+The wrapper prefers FindIt's existing project interpreter and disables Python bytecode writes. Its uv fallback uses a temporary cache by default, so a sandbox does not need access to the home-directory uv cache. Explicit `UV_CACHE_DIR` and `UV_NO_CACHE` settings are preserved.
+
 `<skill-dir>` is the directory containing this file; quote it. The helper resolves the active database from `real_data/readiness/releases/current.json` once per command (never hard-code a release ID), opens it read-only through FindIt's own dashboard app and report/summary functions, and prints JSON (or Markdown for `report`, `digest`, `draft` and `fact`). An `{"error": ...}` output with exit status 1 means an input or lookup failed: read the error and explain the actual missing data or invalid input.
 
 Read [references/commands.md](references/commands.md) for every command, its fields and their meaning, and [references/report-template.md](references/report-template.md) for the report layout before writing a report.

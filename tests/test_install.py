@@ -73,3 +73,61 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(lines[:2], [str(self.root), '1'])
         self.assertIn('--no-sync', lines)
         self.assertEqual(lines[-1], 'release')
+
+    def test_wrapper_prefers_the_existing_project_interpreter(self):
+        self.assertEqual(self.install().returncode, 0)
+        python = self.root / '.venv' / 'bin' / 'python'
+        python.parent.mkdir(parents=True)
+        python.write_text('#!/bin/sh\nprintf "%s\\n" "$FINDIT_ROOT" "$PYTHONDONTWRITEBYTECODE" "$@"\n')
+        python.chmod(0o755)
+        (self.bin / 'uv').write_text('#!/bin/sh\nexit 79\n')
+        env = dict(self.env, PYTHONDONTWRITEBYTECODE='0')
+        result = subprocess.run([str(self.dest / 'scripts' / 'findit'), 'release'], env=env,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         [str(self.root), '1', str((self.dest / 'scripts' / 'findit_query.py').resolve()), 'release'])
+
+    def test_uv_fallback_avoids_the_default_user_cache(self):
+        self.assertEqual(self.install().returncode, 0)
+        (self.bin / 'uv').write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        env = dict(self.env)
+        for key in ('UV_CACHE_DIR', 'UV_NO_CACHE'):
+            env.pop(key, None)
+        result = subprocess.run([str(self.dest / 'scripts' / 'findit'), 'release'], env=env,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--no-cache', result.stdout.splitlines())
+        self.assertIn('--no-sync', result.stdout.splitlines())
+
+    def test_uv_fallback_preserves_explicit_cache_settings(self):
+        self.assertEqual(self.install().returncode, 0)
+        (self.bin / 'uv').write_text('#!/bin/sh\nprintf "%s\\n" "${UV_CACHE_DIR:-}" "${UV_NO_CACHE:-}" "$@"\n')
+        for override in ({'UV_CACHE_DIR': str(self.base / 'chosen cache')}, {'UV_NO_CACHE': 'false'}):
+            with self.subTest(override=override):
+                env = dict(self.env)
+                for key in ('UV_CACHE_DIR', 'UV_NO_CACHE'):
+                    env.pop(key, None)
+                env.update(override)
+                result = subprocess.run([str(self.dest / 'scripts' / 'findit'), 'release'], env=env,
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines()[:2],
+                                 [override.get('UV_CACHE_DIR', ''), override.get('UV_NO_CACHE', '')])
+                self.assertNotIn('--no-cache', result.stdout.splitlines())
+
+    def test_wrapper_propagates_failures_without_running_the_helper_twice(self):
+        self.assertEqual(self.install().returncode, 0)
+        script = '#!/bin/sh\nprintf "called\\n" >> "$FINDIT_TEST_LOG"\nexit 23\n'
+        log = self.base / 'calls'
+        env = dict(self.env, FINDIT_TEST_LOG=str(log))
+        for runner in (self.bin / 'uv', self.root / '.venv' / 'bin' / 'python'):
+            with self.subTest(runner=runner):
+                runner.parent.mkdir(parents=True, exist_ok=True)
+                runner.write_text(script)
+                runner.chmod(0o755)
+                log.write_text('')
+                result = subprocess.run([str(self.dest / 'scripts' / 'findit'), 'release'], env=env,
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 23, result.stderr)
+                self.assertEqual(log.read_text().splitlines(), ['called'])
