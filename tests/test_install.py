@@ -34,7 +34,61 @@ class InstallTests(unittest.TestCase):
 
     def install(self, *args):
         return subprocess.run(['bash', str(self.repo / 'install.sh'), *args],
-                              env=self.env, capture_output=True, text=True, timeout=30)
+                              env=self.env, cwd=self.base, capture_output=True, text=True, timeout=30)
+
+    def test_rejected_destination_does_not_change_saved_root(self):
+        self.dest.mkdir(parents=True)
+        saved = self.repo / 'skills' / 'findit' / 'findit_root'
+        for previous in (None, '/previous/FindIt\n'):
+            with self.subTest(previous=previous):
+                saved.unlink(missing_ok=True)
+                if previous is not None:
+                    saved.write_text(previous)
+                result = self.install()
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('already exists', result.stderr)
+                if previous is None:
+                    self.assertFalse(saved.exists())
+                else:
+                    self.assertEqual(saved.read_text(), previous)
+
+    def test_repeat_link_can_update_saved_root(self):
+        self.assertEqual(self.install().returncode, 0)
+        other = self.base / 'another FindIt'
+        other.mkdir()
+        self.env['FINDIT_ROOT'] = str(other)
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.dest.is_symlink())
+        self.assertEqual((self.dest / 'findit_root').read_text().strip(), str(other))
+
+    def test_install_defaults_to_sibling_checkout_from_another_directory(self):
+        adjacent = self.base / 'Find_v2'
+        adjacent.mkdir()
+        self.env.pop('FINDIT_ROOT')
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.dest / 'findit_root').read_text().strip(), str(adjacent))
+
+    def test_unconfigured_wrapper_defaults_to_sibling_checkout(self):
+        adjacent = self.base / 'Find_v2'
+        adjacent.mkdir()
+        self.env.pop('FINDIT_ROOT')
+        (self.bin / 'uv').write_text('#!/bin/sh\nprintf "%s\\n" "$FINDIT_ROOT"\n')
+        script = self.repo / 'skills' / 'findit' / 'scripts' / 'findit'
+        result = subprocess.run([str(script), 'release'], env=self.env, cwd=self.base,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(adjacent))
+
+    def test_copied_wrapper_uses_saved_root(self):
+        self.assertEqual(self.install('--copy').returncode, 0)
+        self.env.pop('FINDIT_ROOT')
+        (self.bin / 'uv').write_text('#!/bin/sh\nprintf "%s\\n" "$FINDIT_ROOT"\n')
+        result = subprocess.run([str(self.dest / 'scripts' / 'findit'), 'release'], env=self.env,
+                                cwd=self.base, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(self.root))
 
     def test_help_does_not_require_findit_or_create_an_install(self):
         self.env['FINDIT_ROOT'] = str(self.base / 'missing FindIt')

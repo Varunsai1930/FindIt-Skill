@@ -1,12 +1,52 @@
 import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from helpers import COVERAGE, DB, FILES_AT_START, MONTH, SCRIPT, fq, release_files, run, run_json, sidecars
+
+
+class RootResolutionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='findskill-root-')
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name).resolve()
+        self.script = self.base / 'moved checkout' / 'skills' / 'findit' / 'scripts' / 'findit_query.py'
+        self.script.parent.mkdir(parents=True)
+        self.script.write_text(SCRIPT.read_text(encoding='utf-8'), encoding='utf-8')
+        self.saved = self.script.parents[1] / 'findit_root'
+
+    def root(self, override=None):
+        with patch.dict(os.environ):
+            if override is None:
+                os.environ.pop('FINDIT_ROOT', None)
+            else:
+                os.environ['FINDIT_ROOT'] = override
+            return runpy.run_path(str(self.script))['FINDIT_ROOT']
+
+    def test_default_tracks_the_moved_checkout(self):
+        for saved in (None, '', ' \n'):
+            with self.subTest(saved=saved):
+                self.saved.unlink(missing_ok=True)
+                if saved is not None:
+                    self.saved.write_text(saved)
+                self.assertEqual(self.root(), self.base / 'Find_v2')
+
+    def test_saved_location_overrides_the_default(self):
+        saved = self.base / 'saved FindIt'
+        self.saved.write_text(str(saved) + '\n')
+        self.assertEqual(self.root(), saved)
+        self.assertEqual(self.root(override=''), saved)
+
+    def test_environment_overrides_the_saved_location(self):
+        self.saved.write_text(str(self.base / 'saved FindIt') + '\n')
+        override = self.base / 'explicit FindIt'
+        self.assertEqual(self.root(override=str(override)), override)
 
 
 class ErrorTests(unittest.TestCase):

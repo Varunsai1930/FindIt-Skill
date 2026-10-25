@@ -10,7 +10,7 @@ Write a research report on what Indian mutual funds changed in their portfolios,
 
 ## Running the helper
 
-FindIt is a local Python 3.12 project (by default `/Users/varun/Downloads/Varun/Find_v2`; install.sh saves another location in `<skill-dir>/findit_root`). Run the bundled wrapper, which finds FindIt and runs the helper in FindIt's environment:
+FindIt is a local Python 3.12 project (by default the `Find_v2` checkout beside the source FindSkill repo; install.sh saves the selected location in `<skill-dir>/findit_root`, including for copy installs). `FINDIT_ROOT` overrides the saved location. Run the bundled wrapper, which finds FindIt and runs the helper in FindIt's environment:
 
 ```bash
 "<skill-dir>/scripts/findit" <command> [...]

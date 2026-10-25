@@ -5,7 +5,7 @@ Run with FindIt's environment (FindIt itself does every calculation):
     uv run --no-sync --project "$FINDIT_ROOT" python findit_query.py <command> [...]
 
 FindIt's location is $FINDIT_ROOT, else the path saved in <skill-dir>/findit_root
-by install.sh, else /Users/varun/Downloads/Varun/Find_v2 (the bundled `findit`
+by install.sh, else Find_v2 beside the source FindSkill checkout (the bundled `findit`
 wrapper script applies the same order). The database is resolved once per run
 from real_data/readiness/releases/current.json and opened
 read-only, through FindIt's own dashboard app (fastapi TestClient, in-process,
@@ -30,7 +30,7 @@ from pathlib import Path
 # FindIt's packages live outside this skill; importing them must not create .pyc files there.
 sys.dont_write_bytecode = True
 
-DEFAULT_ROOT = "/Users/varun/Downloads/Varun/Find_v2"
+DEFAULT_ROOT = Path(__file__).resolve().parents[4] / "Find_v2"
 
 
 def _findit_root() -> Path:

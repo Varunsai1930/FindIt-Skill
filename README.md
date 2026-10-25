@@ -8,6 +8,8 @@ A Claude Code skill that writes research notes on Indian mutual fund holdings ch
 FINDIT_ROOT=/path/to/Find_v2 ./install.sh   # FindIt elsewhere (saved for the skill)
 ```
 
+By default, installation looks for `Find_v2` beside this repo, regardless of the current directory. The saved location is used by both symlink and copy installs; `FINDIT_ROOT` overrides it.
+
 Then restart Claude Code and type `/findit`, `/findit 2026-08`, `/findit Hyundai Motor India` or `/findit HDFC Flexi Cap`.
 
 - `skills/findit/SKILL.md` — hard rules and workflow
@@ -27,15 +29,16 @@ export FINDIT_ROOT="${FINDIT_ROOT:-../Find_v2}"
 uv run --no-sync --project "$FINDIT_ROOT" python -B -m pytest tests
 ```
 
-Installer tests also run independently of FindIt's environment and release:
+Installer and notes fixture tests also run independently of FindIt's environment and release:
 
 ```bash
 python3 -B -m unittest discover -s tests -p test_install.py
+python3 -B -m unittest discover -s tests -p test_notes.py
 ```
 
 Run static checks with `ruff check skills/findit/scripts tests`.
 
-The tests run `findit_query.py` against the active FindIt release, which they read from `Find_v2/real_data/readiness/releases/current.json`. They contain no release ID. They are read-only: they write nothing to Find_v2, create no `.pyc` files there and add no pytest cache. The tests check that:
+The live tests run `findit_query.py` against the active FindIt release, which they read from `Find_v2/real_data/readiness/releases/current.json`. They contain no release ID. They are read-only: they write nothing to Find_v2, create no `.pyc` files there and add no pytest cache. The tests check that:
 
 - `report` is the same text as `findit.cli.report.build` for the latest month.
 - `top` buying/selling rows give the report's top-15 table cells exactly.

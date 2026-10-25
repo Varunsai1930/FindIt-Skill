@@ -2,7 +2,7 @@
 # Install the findit skill for Claude Code by symlinking (default) or copying.
 #   ./install.sh            symlink into ~/.claude/skills/findit
 #   ./install.sh --copy     copy files instead of symlinking
-#   FINDIT_ROOT=... ./install.sh   use FindIt at another path (default /Users/varun/Downloads/Varun/Find_v2);
+#   FINDIT_ROOT=... ./install.sh   use FindIt at another path (default: ../Find_v2 beside this repo);
 #                                  the path is saved in skills/findit/findit_root for the skill to use
 set -euo pipefail
 
@@ -15,8 +15,9 @@ for arg in "$@"; do
   esac
 done
 
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/skills/findit"
-REQUESTED_ROOT="${FINDIT_ROOT:-/Users/varun/Downloads/Varun/Find_v2}"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SRC="$REPO_DIR/skills/findit"
+REQUESTED_ROOT="${FINDIT_ROOT:-$REPO_DIR/../Find_v2}"
 FINDIT_ROOT="$(cd "$REQUESTED_ROOT" 2>/dev/null && pwd -P)" || {
   echo "FindIt not found at $REQUESTED_ROOT. No skill was installed." >&2; exit 1; }
 
@@ -30,20 +31,26 @@ if ! FINDIT_ROOT="$FINDIT_ROOT" "$SRC/scripts/findit" release >/dev/null; then
   exit 1
 fi
 
-# Remember FindIt's location for the skill (the wrapper and helper read it).
-printf '%s\n' "$FINDIT_ROOT" > "$SRC/findit_root"
-
 dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
-mkdir -p "$dir"
 dest="$dir/findit"
+already_linked=false
 if [ -e "$dest" ] || [ -L "$dest" ]; then
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$SRC" ]; then
-    echo "✓ claude: already linked at $dest (FindIt: $FINDIT_ROOT)"
-    exit 0
+    already_linked=true
+  else
+    echo "✗ claude: $dest already exists; remove it first to reinstall" >&2
+    exit 1
   fi
-  echo "✗ claude: $dest already exists; remove it first to reinstall" >&2
-  exit 1
 fi
+
+mkdir -p "$dir"
+# Save configuration only after accepting the destination, including repeat links.
+printf '%s\n' "$FINDIT_ROOT" > "$SRC/findit_root"
+if [ "$already_linked" = true ]; then
+  echo "✓ claude: already linked at $dest (FindIt: $FINDIT_ROOT)"
+  exit 0
+fi
+
 if [ "$MODE" = copy ]; then
   python3 - "$SRC" "$dest" <<'PY'
 import shutil

@@ -3,8 +3,7 @@ import copy
 import unittest
 from unittest.mock import Mock
 
-import helpers  # noqa: F401 -- initialize the helper import path before importing notes
-import findit_notes as notes
+from bootstrap import notes
 
 
 def context(scope='fund', ranked=True, withheld=False):

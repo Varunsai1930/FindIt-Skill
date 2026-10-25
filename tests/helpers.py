@@ -10,17 +10,10 @@ import contextlib
 import functools
 import io
 import json
-import sys
 from pathlib import Path
 
-# FindIt's packages live in Find_v2; never leave .pyc files there.
-sys.dont_write_bytecode = True
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills" / "findit" / "scripts" / "findit_query.py"
-sys.path.insert(0, str(SCRIPT.parent))
-
-import findit_query as fq  # noqa: E402
+from bootstrap import SCRIPT as SCRIPT
+import findit_query as fq
 
 RELEASE = fq.current_release()
 DB = Path(RELEASE["db"])
